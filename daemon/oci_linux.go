@@ -656,6 +656,10 @@ func (daemon *Daemon) createSpec(c *container.Container) (*libcontainerd.Spec, e
 	if err := daemon.setupIpcDirs(c); err != nil {
 		return nil, err
 	}
+	// SUSE:secrets :: We need to set up the container-specific secrets tmpfs here.
+	if err := daemon.setupSuseSecrets(c); err != nil {
+		return nil, err
+	}
 
 	ms, err := daemon.setupMounts(c)
 	if err != nil {
@@ -663,6 +667,8 @@ func (daemon *Daemon) createSpec(c *container.Container) (*libcontainerd.Spec, e
 	}
 	ms = append(ms, c.IpcMounts()...)
 	ms = append(ms, c.TmpfsMounts()...)
+	// SUSE:secrets :: We add the mounts to the OCI config which containerd then uses.
+	ms = append(ms, c.SuseSecretMounts()...)
 	sort.Sort(mounts(ms))
 	if err := setMounts(daemon, &s, c, ms); err != nil {
 		return nil, fmt.Errorf("linux mounts: %v", err)
