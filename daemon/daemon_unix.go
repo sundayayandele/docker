@@ -786,8 +786,10 @@ func initBridgeDriver(controller libnetwork.NetworkController, config *Config) e
 // the container from unwanted side-effects on the rw layer.
 func setupInitLayer(initLayer string, rootUID, rootGID int) error {
 	for pth, typ := range map[string]string{
-		"/dev/pts":         "dir",
-		"/dev/shm":         "dir",
+		"/dev/pts": "dir",
+		"/dev/shm": "dir",
+		// SUSE:secrets :: We need to add the mountpoint in the init layer.
+		"/run/secrets":     "dir",
 		"/proc":            "dir",
 		"/sys":             "dir",
 		"/.dockerenv":      "file",

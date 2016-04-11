@@ -164,6 +164,12 @@ func (daemon *Daemon) Cleanup(container *container.Container) {
 
 	container.UnmountIpcMounts(detachMounted)
 
+	// TODO(SUSE): Make sure this gets called by containerCleanup. Do we need to
+	//             port this part of the patch there as well?
+
+	// SUSE:secrets :: We need to unmount stuff here so that we clean up properly.
+	container.UnmountSuseSecretMounts(detachMounted)
+
 	if err := daemon.conditionalUnmountOnCleanup(container); err != nil {
 		// FIXME: remove once reference counting for graphdrivers has been refactored
 		// Ensure that all the mounts are gone

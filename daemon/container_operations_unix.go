@@ -182,6 +182,56 @@ func (daemon *Daemon) getIpcContainer(container *container.Container) (*containe
 	return c, nil
 }
 
+// SUSE:secrets :: Create a container's personal /run/secrets tmpfs and fill it
+// with the host's credentials.
+func (daemon *Daemon) setupSuseSecrets(c *container.Container) (err error) {
+	c.SuseSecretsPath, err = c.SuseSecretsResourcePath()
+	if err != nil {
+		return err
+	}
+
+	if !c.HasMountFor("/run/secrets") {
+		rootUID, rootGID := daemon.GetRemappedUIDGID()
+		if err = idtools.MkdirAllAs(c.SuseSecretsPath, 0700, rootUID, rootGID); err != nil {
+			return fmt.Errorf("SUSE:secrets :: failed to create container secret: %v", err)
+		}
+		if err = syscall.Mount("tmpfs", c.SuseSecretsPath, "tmpfs", uintptr(syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV), label.FormatMountLabel("", c.GetMountLabel())); err != nil {
+			return fmt.Errorf("SUSE:secrets :: mounting secrets tmpfs: %v", err)
+		}
+		// We need to defer a cleanup, to make sure errors that occur before the container
+		// starts don't cause wasted memory due to tmpfs-es that aren't being used.
+		defer func() {
+			if err != nil {
+				logrus.Infof("SUSE::secrets :: cleaning up secrets mount due to failed setup")
+				c.UnmountSuseSecretMounts(detachMounted)
+			}
+		}()
+		if err = os.Chown(c.SuseSecretsPath, rootUID, rootGID); err != nil {
+			return fmt.Errorf("SUSE:secrets :: failed to chown container secret to (uid=%d,gid=%d): %v", rootUID, rootGID, err)
+		}
+
+		// Now we need to inject the credentials. But in order to play properly with
+		// user namespaces, they must be owned by rootUID:rootGID.
+
+		data, err := getHostSuseSecretData()
+		if err != nil {
+			return fmt.Errorf("SUSE:secrets :: failed to get host secret data: %v", err)
+		}
+
+		uidMap, gidMap := daemon.GetUIDGIDMaps()
+		for _, s := range data {
+			if err := s.SaveTo(c.SuseSecretsPath, uidMap, gidMap); err != nil {
+				logrus.WithFields(logrus.Fields{
+					"s.path": s.Path,
+					"path":   c.SuseSecretsPath,
+				}).Errorf("SUSE:secrets :: failed to save secret data: %v", err)
+			}
+		}
+	}
+
+	return
+}
+
 func (daemon *Daemon) setupIpcDirs(c *container.Container) error {
 	var err error
 

@@ -34,6 +34,8 @@ type Container struct {
 	HostsPath       string
 	ShmPath         string
 	ResolvConfPath  string
+	// SUSE:secrets :: We need to add the container-specific secrets path here.
+	SuseSecretsPath string
 	SeccompProfile  string
 	NoNewPrivileges bool
 }
@@ -241,6 +243,67 @@ func (container *Container) IpcMounts() []Mount {
 	}
 
 	return mounts
+}
+
+// SUSE:secrets :: SuseSecretsResourcePath returns the path to the container's
+// personal /run/secrets tmpfs.
+func (container *Container) SuseSecretsResourcePath() (string, error) {
+	return container.GetRootResourcePath("suse.secrets")
+}
+
+// SUSE:secrets :: SuseSecretMounts returns the list of mounts required for the
+// SUSE-specific /run/secrets patch. The container's personal /run/secrets tmpfs
+// has already been set up at this point.
+func (container *Container) SuseSecretMounts() []Mount {
+	var mounts []Mount
+
+	logrus.WithFields(logrus.Fields{
+		"container": container.ID,
+		"path":      container.SuseSecretsPath,
+		"hasmount":  container.HasMountFor("/run/secrets"),
+	}).Debug("SUSE:secrets :: adding container secrets to mountpoint")
+
+	// TODO(SUSE): How do we register for HasMountFor().
+	if !container.HasMountFor("/run/secrets") {
+		label.SetFileLabel(container.SuseSecretsPath, container.MountLabel)
+		mounts = append(mounts, Mount{
+			Source:      container.SuseSecretsPath,
+			Destination: "/run/secrets",
+			Writable:    true,
+			Propagation: volume.DefaultPropagationMode,
+		})
+	}
+
+	return mounts
+}
+
+// SUSE:secrets :: Unmounts the container's personal /run/secrets tmpfs using the
+// provided function. This is done to clean up the mountpoints properly.
+func (container *Container) UnmountSuseSecretMounts(unmount func(string) error) {
+	logrus.WithFields(logrus.Fields{
+		"container": container.ID,
+		"hasmount":  container.HasMountFor("/run/secrets"),
+	}).Debug("SUSE:secrets :: requested to clean up container secrets")
+
+	if !container.HasMountFor("/run/secrets") {
+		logrus.Debugf("SUSE:secrets :: cleaning up secrets mount for container")
+
+		suseSecretsPath, err := container.SuseSecretsResourcePath()
+		if err != nil {
+			logrus.Error("SUSE:secrets :: failed to clean up secrets mounts: no secrets resource path found for container %v: %v", container.ID, err)
+		}
+
+		if suseSecretsPath != "" {
+			logrus.WithFields(logrus.Fields{
+				"path": suseSecretsPath,
+			}).Debugf("SUSE:secrets :: actually unmounting conatiner secrets")
+
+			if err := unmount(suseSecretsPath); err != nil && !os.IsNotExist(err) {
+				// We can't error out here.
+				logrus.Warnf("SUSE:secrets :: failed to clean up secrets mounts: failed to umount %s: %v", suseSecretsPath, err)
+			}
+		}
+	}
 }
 
 // UpdateContainer updates configuration of a container.
