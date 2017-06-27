@@ -2672,6 +2672,14 @@ func NewDeviceSet(root string, doInit bool, options []string, uidMaps, gidMaps [
 				return nil, err
 			}
 			devices.xfsNospaceRetries = val
+		case "dm.libdm_log_level":
+			level, err := strconv.ParseInt(val, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("could not parse `dm.libdm_log_level=%s`: %v", val, err)
+			}
+			if err := devicemapper.DmLogLevel(int(level)); err != nil {
+				return nil, fmt.Errorf("failed to set `dm.libdm_log_level=%s`: %v", val, err)
+			}
 		default:
 			return nil, fmt.Errorf("devmapper: Unknown option %s\n", key)
 		}
