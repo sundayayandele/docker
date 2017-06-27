@@ -17,6 +17,18 @@ import (
 // this through --storage-opt="dm.libdm_log_level=X".
 var dmLogLevel = LogLevelFatal
 
+// DmLogLevel sets the log level at which libdm logs are sent to logrus. This
+// is necessary to avoid spamming people looking at the logs of Docker with
+// libdm information.
+func DmLogLevel(value int) error {
+	// Make sure the value makes sense.
+	if value < LogLevelFatal || value > LogLevelDebug {
+		return fmt.Errorf("invalid libdm log level: must be in range [%d,%d]", LogLevelFatal, LogLevelDebug)
+	}
+	dmLogLevel = value
+	return nil
+}
+
 // Due to the way cgo works this has to be in a separate file, as devmapper.go has
 // definitions in the cgo block, which is incompatible with using "//export"
 
