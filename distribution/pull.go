@@ -129,10 +129,11 @@ func Pull(ctx context.Context, ref reference.Named, imagePullConfig *ImagePullCo
 			}
 		}
 
-		logrus.Debugf("Trying to pull %s from %s %s", repoInfo.Name(), endpoint.URL, endpoint.Version)
+		logrus.Infof("Trying to pull %s from %s %s", repoInfo.Name(), endpoint.URL, endpoint.Version)
 
 		puller, err := newPuller(endpoint, repoInfo, imagePullConfig)
 		if err != nil {
+			logrus.Infof("Error pulling %s from %s %s: %v", repoInfo.Name(), endpoint.URL, endpoint.Version, err)
 			lastErr = err
 			continue
 		}

@@ -1,43 +1,73 @@
 package registry
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
 	"github.com/docker/go-connections/tlsconfig"
+	"github.com/Sirupsen/logrus"
 )
 
-func (s *DefaultService) lookupV2Endpoints(hostname string) (endpoints []APIEndpoint, err error) {
+func (s *DefaultService) lookupV2Endpoints(reference string) (endpoints []APIEndpoint, err error) {
 	var cfg = tlsconfig.ServerDefault
 	tlsConfig := &cfg
-	if hostname == DefaultNamespace || hostname == DefaultV1Registry.Host {
-		// v2 mirrors
-		for _, mirror := range s.config.Mirrors {
-			if !strings.HasPrefix(mirror, "http://") && !strings.HasPrefix(mirror, "https://") {
-				mirror = "https://" + mirror
+
+	logrus.Debugf("[lookupV2Endpoints] reference: %s", reference)
+
+	// as the reference can be a prefix, extract the hostname with URL.Parse()
+	refURL := reference
+	if !strings.HasPrefix(refURL, "http://") && !strings.HasPrefix(refURL, "https://") {
+		refURL = "https://" + refURL
+	}
+	u, err := url.Parse(refURL)
+	if err != nil {
+		return nil, fmt.Errorf("[lookupV2Endpoints] error parsing reference %s: %s", reference, err)
+	}
+
+	hostname := u.Host // hostname + port (if present)
+	if hostname == "" {
+		return nil, fmt.Errorf("[lookupV2Endpoints] cannot determine hostname of reference %s", reference)
+	}
+
+	// create endpoints for official and configured registries
+	reg, foundReg := s.config.FindRegistry(reference)
+	official := false
+	if hostname == DefaultNamespace || hostname == IndexName || reg.Official {
+		official = true
+	}
+	if foundReg || official {
+		// set the URL of the registry
+		var endpointURL *url.URL
+		if official {
+			endpointURL = DefaultV2Registry
+		} else {
+			endpointURL = &url.URL{
+				Scheme: reg.URL.Scheme,
+				Host:   reg.URL.Host,
 			}
-			mirrorURL, err := url.Parse(mirror)
+		}
+
+		// if present, add mirrors before the registry
+		for _, mirror := range reg.Mirrors {
+			mirrorTLSConfig, err := s.tlsConfigForMirror(mirror.URL)
 			if err != nil {
-				return nil, err
-			}
-			mirrorTLSConfig, err := s.tlsConfigForMirror(mirrorURL)
-			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("[lookupV2Endpoints] %s", err)
 			}
 			endpoints = append(endpoints, APIEndpoint{
-				URL: mirrorURL,
-				// guess mirrors are v2
+				URL:          mirror.URL,
 				Version:      APIVersion2,
 				Mirror:       true,
 				TrimHostname: true,
 				TLSConfig:    mirrorTLSConfig,
 			})
 		}
-		// v2 registry
+
+		// add the registry
 		endpoints = append(endpoints, APIEndpoint{
-			URL:          DefaultV2Registry,
+			URL:          endpointURL,
 			Version:      APIVersion2,
-			Official:     true,
+			Official:     official,
 			TrimHostname: true,
 			TLSConfig:    tlsConfig,
 		})
