@@ -426,6 +426,7 @@ out1:
 	for {
 		select {
 		case err := <-d.Wait:
+			d.log.Logf("[%s] [1] daemon waiting", d.id)
 			return err
 		case <-time.After(20 * time.Second):
 			// time for stopping jobs and run onShutdown hooks
@@ -438,6 +439,7 @@ out2:
 	for {
 		select {
 		case err := <-d.Wait:
+			d.log.Logf("[%s] [2] daemon waiting", d.id)
 			return err
 		case <-tick:
 			i++
@@ -459,7 +461,9 @@ out2:
 
 	d.cmd.Wait()
 
-	if err := os.Remove(fmt.Sprintf("%s/docker.pid", d.Folder)); err != nil {
+	path := fmt.Sprintf("%s/docker.pid", d.Folder)
+	if err := os.Remove(path); err != nil {
+		d.log.Logf("Could not remove %s: %v", path, err)
 		return err
 	}
 

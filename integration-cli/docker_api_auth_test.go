@@ -20,6 +20,6 @@ func (s *DockerSuite) TestAuthAPI(c *check.C) {
 	defer cli.Close()
 
 	_, err = cli.RegistryLogin(context.Background(), config)
-	expected := "Get https://registry-1.docker.io/v2/: unauthorized: incorrect username or password"
+	expected := "Get https://index.docker.io/v2/: unauthorized: incorrect username or password"
 	c.Assert(err.Error(), checker.Contains, expected)
 }

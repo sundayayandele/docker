@@ -100,7 +100,7 @@ func (daemon *Daemon) GetRepository(ctx context.Context, ref reference.Named, au
 	}
 
 	// get endpoints
-	endpoints, err := daemon.RegistryService.LookupPullEndpoints(reference.Domain(repoInfo.Name))
+	endpoints, err := daemon.RegistryService.LookupPullEndpoints(ref.Name())
 	if err != nil {
 		return nil, false, err
 	}
