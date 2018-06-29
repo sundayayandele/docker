@@ -15,6 +15,15 @@ const (
 	defaultAppArmorProfile    = "docker-default"
 )
 
+func clobberDefaultAppArmorProfile() error {
+	if apparmor.IsEnabled() {
+		if err := aaprofile.InstallDefault(defaultAppArmorProfile); err != nil {
+			return fmt.Errorf("AppArmor enabled on system but the %s profile could not be loaded: %s", defaultAppArmorProfile, err)
+		}
+	}
+	return nil
+}
+
 func ensureDefaultAppArmorProfile() error {
 	if apparmor.IsEnabled() {
 		loaded, err := aaprofile.IsLoaded(defaultAppArmorProfile)
@@ -28,10 +37,7 @@ func ensureDefaultAppArmorProfile() error {
 		}
 
 		// Load the profile.
-		if err := aaprofile.InstallDefault(defaultAppArmorProfile); err != nil {
-			return fmt.Errorf("AppArmor enabled on system but the %s profile could not be loaded: %s", defaultAppArmorProfile, err)
-		}
+		return clobberDefaultAppArmorProfile()
 	}
-
 	return nil
 }
